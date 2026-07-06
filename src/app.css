@@ -38,7 +38,6 @@
   --gradient-signature: linear-gradient(135deg, #003dc7 0%, #0051ff 100%);
   --size-sidebar-expanded: 16rem;
   --size-sidebar-collapsed: 5rem;
-  --layout-sidebar-offset: calc(var(--size-sidebar-collapsed) + var(--space-3));
   --mobile-nav-height: 5rem;
 }
 
@@ -101,6 +100,11 @@ select {
 .layout-shell {
   min-height: 100vh;
   position: relative;
+  --layout-sidebar-offset: calc(var(--size-sidebar-collapsed) + var(--space-3));
+}
+
+.layout-shell:has(aside.sidebar:not(.collapsed)) {
+  --layout-sidebar-offset: calc(var(--size-sidebar-expanded) + var(--space-3));
 }
 
 .layout-shell .main {
