@@ -1257,6 +1257,123 @@ export async function updateUserInDb(
   };
 }
 
+export interface PasswordResetTokenRecord {
+  id: string;
+  userId: string;
+  tokenHash: string;
+  expiresAt: string;
+  usedAt: string | null;
+}
+
+export async function createPasswordResetTokenInDb(
+  db: D1Database,
+  userId: string,
+  tokenHash: string,
+  ttlMinutes: number
+): Promise<void> {
+  const id = crypto.randomUUID();
+  await db
+    .prepare(
+      `
+      INSERT INTO password_reset_tokens (id, user_id, token_hash, created_at, expires_at)
+      VALUES (?, ?, ?, CURRENT_TIMESTAMP, datetime('now', '+' || ? || ' minute'))
+    `
+    )
+    .bind(id, userId, tokenHash, ttlMinutes)
+    .run();
+}
+
+export async function findValidPasswordResetTokenInDb(
+  db: D1Database,
+  tokenHash: string
+): Promise<{ id: string; userId: string } | null> {
+  const row = await db
+    .prepare(
+      `
+      SELECT id, user_id
+      FROM password_reset_tokens
+      WHERE token_hash = ?
+        AND used_at IS NULL
+        AND expires_at > CURRENT_TIMESTAMP
+      LIMIT 1
+    `
+    )
+    .bind(tokenHash)
+    .first<{ id: string; user_id: string }>();
+
+  if (!row) {
+    return null;
+  }
+
+  return { id: row.id, userId: row.user_id };
+}
+
+export async function markPasswordResetTokenUsedInDb(db: D1Database, tokenId: string): Promise<void> {
+  await db
+    .prepare(
+      `
+      UPDATE password_reset_tokens
+      SET used_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+        AND used_at IS NULL
+    `
+    )
+    .bind(tokenId)
+    .run();
+}
+
+export async function findUserByIdentifier(
+  db: D1Database,
+  identifier: string
+): Promise<{ id: string; email: string; displayName: string; telegramEnabled: boolean } | null> {
+  const normalized = identifier.trim().toLowerCase();
+  const row = await db
+    .prepare(
+      `
+      SELECT id, email, COALESCE(display_name, email) AS display_name, telegram_enabled
+      FROM users
+      WHERE lower(email) = lower(?)
+         OR lower(substr(email, 1, instr(email, '@') - 1)) = lower(?)
+      LIMIT 1
+    `
+    )
+    .bind(normalized, normalized)
+    .first<{ id: string; email: string; display_name: string; telegram_enabled: number }>();
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    id: row.id,
+    email: row.email,
+    displayName: row.display_name,
+    telegramEnabled: Number(row.telegram_enabled ?? 0) === 1
+  };
+}
+
+export async function getUserPasswordHashInDb(db: D1Database, userId: string): Promise<string | null> {
+  const row = await db
+    .prepare('SELECT password_hash FROM users WHERE id = ? LIMIT 1')
+    .bind(userId)
+    .first<{ password_hash: string | null }>();
+
+  return row?.password_hash ?? null;
+}
+
+export async function updateUserPasswordInDb(db: D1Database, userId: string, passwordHash: string): Promise<void> {
+  await db
+    .prepare(
+      `
+      UPDATE users
+      SET password_hash = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `
+    )
+    .bind(passwordHash, userId)
+    .run();
+}
+
 export async function deleteUserInDb(db: D1Database | undefined, userId: string): Promise<DeleteUserResult> {
   if (!db) {
     throw new Error('DB binding is required for delete operation');

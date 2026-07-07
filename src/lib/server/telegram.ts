@@ -305,6 +305,46 @@ export async function sendInboundEmailTelegramNotification(
   return sentCount;
 }
 
+export interface TelegramPasswordResetPayload {
+  displayName: string;
+  email: string;
+  resetToken: string;
+  ttlMinutes: number;
+}
+
+export async function sendPasswordResetTelegramNotification(
+  db: D1Database | undefined,
+  env: TelegramPlatformEnv | undefined,
+  payload: TelegramPasswordResetPayload
+): Promise<boolean> {
+  if (!db) {
+    return false;
+  }
+
+  const config = await loadTelegramConfig(db, env);
+  if (!config) {
+    return false;
+  }
+
+  const targetChatIds = resolveAllChatIds(config);
+  if (targetChatIds.length === 0) {
+    return false;
+  }
+
+  const text = buildPasswordResetMarkdown(payload);
+  let sent = false;
+  for (const chatId of targetChatIds) {
+    try {
+      await sendTelegramMessage(config.token, chatId, text);
+      sent = true;
+    } catch {
+      // Notification failure should not fail reset flow
+    }
+  }
+
+  return sent;
+}
+
 export async function getTelegramWebhookInfo(
   db: D1Database | undefined,
   env: TelegramPlatformEnv | undefined
@@ -1284,6 +1324,36 @@ function resolveTargetChatIds(config: TelegramConfig): string[] {
   }
 
   return Array.from(ids);
+}
+
+function resolveAllChatIds(config: { allowedIds: Set<string>; defaultChatId: string; testChatId: string }): string[] {
+  const ids = new Set<string>();
+  if (config.defaultChatId) ids.add(config.defaultChatId);
+  if (config.testChatId) ids.add(config.testChatId);
+  for (const id of config.allowedIds) ids.add(id);
+  return Array.from(ids);
+}
+
+function buildPasswordResetMarkdown(payload: TelegramPasswordResetPayload): string {
+  return [
+    '*Password Reset Request*',
+    '',
+    `User: \`${sanitizeCodeBlock(payload.displayName)}\``,
+    `Email: \`${sanitizeCodeBlock(payload.email)}\``,
+    '',
+    'Your password reset token:',
+    '```text',
+    sanitizeCodeBlock(payload.resetToken),
+    '```',
+    '',
+    `This token expires in ${payload.ttlMinutes} minutes and can only be used once.`,
+    '',
+    'To reset your password, send a POST request to:',
+    '```text',
+    'POST /api/auth/reset-password',
+    `Body: {"token": "${payload.resetToken}", "password": "<new-password>"}`,
+    '```'
+  ].join('\n');
 }
 
 function isAllowedTelegramUser(config: TelegramConfig, telegramUserId: string): boolean {

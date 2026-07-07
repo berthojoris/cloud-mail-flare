@@ -141,6 +141,17 @@ CREATE TABLE IF NOT EXISTS login_sessions (
   client_ip TEXT NOT NULL DEFAULT ''
 );
 
+-- ── Password Reset Tokens ─────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at TEXT NOT NULL,
+  used_at TEXT,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
 -- ── Telegram Webhook Updates (dedup) ───────────────────────────────────
 CREATE TABLE IF NOT EXISTS telegram_webhook_updates (
   update_id INTEGER PRIMARY KEY,
@@ -173,6 +184,8 @@ DROP INDEX IF EXISTS idx_emails_deleted;
 CREATE INDEX IF NOT EXISTS idx_access_codes_expires ON access_codes(expires_at);
 CREATE INDEX IF NOT EXISTS idx_access_sessions_expires ON access_sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_login_sessions_expires ON login_sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_expires ON password_reset_tokens(expires_at);
+CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user ON password_reset_tokens(user_id, used_at);
 CREATE INDEX IF NOT EXISTS idx_login_sessions_user ON login_sessions(user_id, expires_at DESC);
 
 -- ── Cleanup (tables no longer used) ────────────────────────────────────

@@ -13,6 +13,8 @@ function isPublicPath(pathname: string): boolean {
     pathname === '/api/auth/login' ||
     pathname === '/api/auth/logout' ||
     pathname === '/api/auth/access-code' ||
+    pathname === '/api/auth/forgot-password' ||
+    pathname === '/api/auth/reset-password' ||
     pathname === '/api/health' ||
     pathname === '/api/telegram/webhook' ||
     pathname === '/api/telegram/notify-email' ||
