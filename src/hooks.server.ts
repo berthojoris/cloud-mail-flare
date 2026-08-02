@@ -50,9 +50,7 @@ export const handle: Handle = async ({ event, resolve }) => {
     if (pathname.startsWith('/api/')) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
-        headers: {
-          'content-type': 'application/json'
-        }
+        headers: { 'content-type': 'application/json' }
       });
     }
 
@@ -74,15 +72,12 @@ export const handle: Handle = async ({ event, resolve }) => {
         pathname === '/api/health' ||
         pathname === '/api/me' ||
         pathname === '/api/me/inbox' ||
-        pathname.startsWith('/api/me/emails/') ||
-        pathname.startsWith('/api/public/v1/');
+        pathname.startsWith('/api/me/emails/');
 
       if (!isAllowedApi) {
         return new Response(JSON.stringify({ error: 'Forbidden: inbox-only account' }), {
           status: 403,
-          headers: {
-            'content-type': 'application/json'
-          }
+          headers: { 'content-type': 'application/json' }
         });
       }
     } else if (!isPublicPath(pathname) && !isAllowedPage) {
@@ -90,5 +85,55 @@ export const handle: Handle = async ({ event, resolve }) => {
     }
   }
 
-  return resolve(event);
+  // CSRF: validate Origin/Referer on state-changing API requests
+  // Exempt external webhook endpoints (Telegram sends POST without Origin/Referer)
+  const isCsrfExempt =
+    pathname === '/api/telegram/webhook' ||
+    pathname === '/api/telegram/notify-email' ||
+    pathname.startsWith('/api/public/v1/');
+  if (!isCsrfExempt && pathname.startsWith('/api/') && event.request.method !== 'GET' && event.request.method !== 'HEAD') {
+    const origin = event.request.headers.get('origin');
+    const referer = event.request.headers.get('referer');
+    const host = event.url.hostname;
+    const allowed = origin
+      ? new URL(origin).hostname === host
+      : referer
+        ? new URL(referer).hostname === host
+        : false;
+    if (!allowed) {
+      return new Response(JSON.stringify({ error: 'CSRF validation failed' }), {
+        status: 403,
+        headers: { 'content-type': 'application/json' }
+      });
+    }
+  }
+
+  const response = await resolve(event);
+
+  // Security headers
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  response.headers.set('X-Frame-Options', 'DENY');
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+
+  if (event.url.protocol === 'https:') {
+    response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+
+  // CSP — tailored for SvelteKit + Cloudflare Turnstile + Google Fonts
+  const csp = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "img-src 'self' data: https:",
+    "font-src 'self' https://fonts.gstatic.com",
+    "connect-src 'self' https://challenges.cloudflare.com https://static.cloudflareinsights.com",
+    "frame-src https://challenges.cloudflare.com",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'"
+  ].join('; ');
+  response.headers.set('Content-Security-Policy', csp);
+
+  return response;
 };

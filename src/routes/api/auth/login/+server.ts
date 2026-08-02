@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import { createUserInDb, getUserAuthByEmail } from '$lib/server/db';
 import { createLoginSession, extractClientIp, extractUserAgent, SESSION_COOKIE_NAME, SESSION_MAX_AGE_SECONDS } from '$lib/server/session';
 import { hashPassword, verifyPassword } from '$lib/server/security';
+import { checkRateLimit, rateLimitKey } from '$lib/server/rate-limit';
 
 function toErrorMessage(error: unknown): string {
   if (error instanceof Error) {
@@ -23,6 +24,12 @@ export const POST: RequestHandler = async ({ request, cookies, platform, url }) 
   const db = platform?.env?.DB;
   if (!db) {
     return json({ error: 'Database is not configured' }, { status: 503 });
+  }
+
+  // Rate limit: 10 login attempts per minute per IP
+  const rl = checkRateLimit(rateLimitKey(request, 'login'), 10, 60_000);
+  if (!rl.allowed) {
+    return json({ error: `Too many login attempts. Retry in ${rl.retryAfterSeconds}s` }, { status: 429 });
   }
 
   const contentType = request.headers.get('content-type') ?? '';
@@ -53,8 +60,11 @@ export const POST: RequestHandler = async ({ request, cookies, platform, url }) 
     }
 
     // Verifikasi Cloudflare Turnstile
-    const turnstileSecret = platform?.env?.TURNSTILE_SECRET_KEY || '1x0000000000000000000000000000000AA'; // Menggunakan dummy secret testing
-    if (turnstileSecret && turnstileToken) {
+    const turnstileSecret = platform?.env?.TURNSTILE_SECRET_KEY;
+    if (!turnstileSecret) {
+      return json({ error: 'CAPTCHA not configured' }, { status: 503 });
+    }
+    if (turnstileToken) {
       const formData = new FormData();
       formData.append('secret', turnstileSecret);
       formData.append('response', turnstileToken);
@@ -69,7 +79,7 @@ export const POST: RequestHandler = async ({ request, cookies, platform, url }) 
           body: formData,
           method: 'POST'
         });
-        const tsOutcome = await tsResult.json() as any;
+        const tsOutcome = await tsResult.json() as { success?: boolean };
         if (!tsOutcome.success) {
           return json({ error: 'Verifikasi keamanan Turnstile gagal. Silakan muat ulang halaman.' }, { status: 403 });
         }

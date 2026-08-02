@@ -44,12 +44,12 @@
 :root[data-theme='dark'] {
   --color-primary-500: #427cff;
   --color-primary-700: #6896ff;
-  --color-surface: #121316;
-  --color-surface-low: #1a1c21;
-  --color-surface-card: #202227;
-  --color-text: #e1e2e8;
-  --color-text-muted: #9fa1ad;
-  --color-outline: #424451;
+  --color-surface: #0e0f12;
+  --color-surface-low: #16181d;
+  --color-surface-card: #1c1e24;
+  --color-text: #ededef;
+  --color-text-muted: #b0b3be;
+  --color-outline: #3a3d4a;
   --color-danger: #ffb4ab;
   --color-warning: #ffb4a0;
   --color-success: #7cd590;
@@ -69,7 +69,7 @@ body {
   font-family: var(--font-family-body);
   font-size: var(--font-size-body-sm);
   color: var(--color-text);
-  background: radial-gradient(circle at 100% 0%, rgba(0, 81, 255, 0.06), transparent 40%), var(--color-surface);
+  background: var(--color-surface);
 }
 
 h1,
@@ -97,6 +97,7 @@ select {
   vertical-align: middle;
 }
 
+/* ── Layout Shell ─────────────────────────────────────────────── */
 .layout-shell {
   min-height: 100vh;
   position: relative;
@@ -111,26 +112,29 @@ select {
   min-height: 100vh;
   width: 100%;
   min-width: 0;
-  padding-left: var(--layout-sidebar-offset);
+  padding-left: var(--size-sidebar-expanded);
+  transition: padding-left 180ms ease;
+}
+
+.layout-shell .main.sidebar-collapsed {
+  padding-left: var(--size-sidebar-collapsed);
 }
 
 @media (max-width: 960px) {
-  .layout-shell .main {
+  .layout-shell .main,
+  .layout-shell .main.sidebar-collapsed {
     padding-left: 0;
   }
 }
 
+/* ── Surface Card ─────────────────────────────────────────────── */
 .surface-card {
   background: var(--color-surface-card);
-  border: 1px solid color-mix(in srgb, var(--color-outline), transparent 60%);
+  border: 1px solid color-mix(in srgb, var(--color-outline), transparent 72%);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-ambient);
 }
 
-.text-muted {
-  color: var(--color-text-muted);
-}
-
-.signature-bg {
-  background: var(--gradient-signature);
+.surface-card.padded {
+  padding: var(--space-5);
 }

@@ -113,6 +113,7 @@ CREATE TABLE IF NOT EXISTS access_codes (
   id TEXT PRIMARY KEY,
   code_hash TEXT NOT NULL UNIQUE,
   telegram_user_id TEXT NOT NULL,
+  user_id TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   expires_at TEXT NOT NULL,
   used_at TEXT
@@ -164,9 +165,13 @@ CREATE TABLE IF NOT EXISTS api_keys (
   key_hash TEXT NOT NULL UNIQUE,
   name TEXT,
   created_by TEXT,
+  user_id TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   revoked_at TEXT
 );
+
+-- Migration: add user_id to api_keys (idempotent)
+ALTER TABLE api_keys ADD COLUMN user_id TEXT;
 
 -- ── Indexes ────────────────────────────────────────────────────────────
 -- Optimasi list inbox user yang memfilter Trash (deleted_at IS NULL + urutan)
@@ -191,3 +196,11 @@ CREATE INDEX IF NOT EXISTS idx_login_sessions_user ON login_sessions(user_id, ex
 -- ── Cleanup (tables no longer used) ────────────────────────────────────
 DROP INDEX IF EXISTS idx_telegram_events_user;
 DROP TABLE IF EXISTS telegram_events;
+
+-- ── Migrasi: Per-user Telegram forwarding toggle ─────────────────────
+-- Kolom telegram_enabled sudah ada di CREATE TABLE IF NOT EXISTS di atas
+-- untuk database baru. Untuk database existing, jalankan ALTER TABLE:
+-- ALTER TABLE users ADD COLUMN telegram_enabled INTEGER NOT NULL DEFAULT 1;
+--
+-- Cek apakah kolom sudah ada (idempoten):
+-- PRAGMA table_info(users);

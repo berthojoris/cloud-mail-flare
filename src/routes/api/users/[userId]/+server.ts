@@ -3,7 +3,11 @@ import type { RequestHandler } from './$types';
 import { getUserByIdFromDb, softDeleteUserInDb, updateUserInDb } from '$lib/server/db';
 import { generateSecurePassword, hashPassword } from '$lib/server/security';
 
-export const GET: RequestHandler = async ({ platform, params }) => {
+export const GET: RequestHandler = async ({ platform, params, locals }) => {
+  if (!locals.authenticated || locals.sessionRole !== 'owner') {
+    return json({ error: 'Forbidden' }, { status: 403 });
+  }
+
   const user = await getUserByIdFromDb(platform?.env?.DB, params.userId);
   if (!user) {
     return json({ error: 'User not found' }, { status: 404 });
@@ -13,8 +17,8 @@ export const GET: RequestHandler = async ({ platform, params }) => {
 };
 
 export const PATCH: RequestHandler = async ({ platform, params, request, locals }) => {
-  if (!locals.authenticated) {
-    return json({ error: 'Unauthorized' }, { status: 401 });
+  if (!locals.authenticated || locals.sessionRole !== 'owner') {
+    return json({ error: 'Forbidden' }, { status: 403 });
   }
 
   const contentType = request.headers.get('content-type') ?? '';
@@ -37,6 +41,9 @@ export const PATCH: RequestHandler = async ({ platform, params, request, locals 
       if (!user) {
         return json({ error: 'User not found' }, { status: 404 });
       }
+
+      // Revoke all existing sessions for this user
+      await platform?.env?.DB?.prepare('DELETE FROM login_sessions WHERE user_id = ?').bind(params.userId).run();
 
       return json({ ok: true, user, password: generatedPassword });
     } catch (error) {
@@ -82,6 +89,11 @@ export const PATCH: RequestHandler = async ({ platform, params, request, locals 
       return json({ error: 'User not found' }, { status: 404 });
     }
 
+    // Revoke all existing sessions when password changes
+    if (password) {
+      await platform?.env?.DB?.prepare('DELETE FROM login_sessions WHERE user_id = ?').bind(params.userId).run();
+    }
+
     return json({ ok: true, user });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -97,8 +109,8 @@ export const PATCH: RequestHandler = async ({ platform, params, request, locals 
 };
 
 export const DELETE: RequestHandler = async ({ platform, params, request, locals }) => {
-  if (!locals.authenticated) {
-    return json({ error: 'Unauthorized' }, { status: 401 });
+  if (!locals.authenticated || locals.sessionRole !== 'owner') {
+    return json({ error: 'Forbidden' }, { status: 403 });
   }
 
   if (locals.sessionUserId && locals.sessionUserId === params.userId) {
