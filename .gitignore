@@ -50,3 +50,9 @@ Thumbs.db
 stitch_exports/
 wrangler.toml
 NOTE.txt
+.akun/
+.cursor/
+.factory/
+.playwright-mcp/
+.setup-token-production.txt
+scripts/bulk-create-users.mjs
