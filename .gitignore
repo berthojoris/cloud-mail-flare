@@ -56,3 +56,4 @@ NOTE.txt
 .playwright-mcp/
 .setup-token-production.txt
 scripts/bulk-create-users.mjs
+NOTE.txt
